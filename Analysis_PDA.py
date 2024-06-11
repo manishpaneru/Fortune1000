@@ -1,151 +1,236 @@
-# We are gonna do some data cleaning then we are gonna do some data analysis and then data visualization #let's import necassary libraries and dependencies
+# First let's import all the necassary libraries and dependecies 
 import pandas as pd
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats
+import re
 
-# Now let's read the data into the datafrane
+
 df = pd.read_csv("Fortune_1000.csv")
 
-pd.set_option(
-    "display.max_rows", None
-)  # This code will let us view the entire data when not just some preview
-df  # Let's see some simple information about the data
-df.info()  # Now let's see some simple description of the data that we have
-df.describe()  # Now that w completly understand the data , Let's do some data cleaning which will make the data easy to interpret
-# First let's have a look at the propotion of the missing values in the data frame
-for (
-    col
-) in (
-    df.columns
-):  # this will loop through the columns and find the propotion of the data
-    pct_missing = np.mean(df[col].isnull())
-    print("{} - {:.2f}%".format(col, pct_missing * 100))
-# So this will loop through all the columns nad print the proportion of missing value in total value #Okay alot of null values in the dataframe , first let's take care of that shall we.
-# well et's try to use forward fill and then we can continue with the data
-df.fillna(method="bfill", inplace=True)
-# Okay now that's taken care of #to make analysis easier let's cahne the name of some columns first.
-df.rename(columns={"num. of employees": "employees"}, inplace=True)
-# This is the only columns name that could be some problems #Now that's done , I wanna change the yes to 1 and no to 0 , so that it will be easier later.
-df.replace(
-    {"yes": 1, "no": 0}, inplace=True
-)  # This should change all the yes to 1 and no to 0 #Now that that's taken care of we can move on , we also dont need the Website and Ticker columns as they are useless for our analysis
-df.drop(
-    columns=["Website", "Ticker"], inplace=True
-)  # This should delete both columns #Now that we are done with it , Let's move on with the data cleaning.
-# all the columns that hold monetary values are in manitute of million which can be very hard to so let's change them into their full value
-# as the value of each of each monetary column we can just loop along with it
-columns = ["revenue", "profit", "Market Cap"]
 
-# Iterate over each column in the list
-for col in columns:
-    # Multiply the values in the current column by 1,000,000
-    df[col] *= 1000000
-    # now that we are done with that , let's move on to anotehr data cleaning step ,
-# let's detect and remove outliers if there are any. df.describe()#Next step in finding an outlier would be to plot the data , let's plot the proit and revenue columns as they are most likely to have outliers
-# Set up the matplotlib figure
-plt.figure(figsize=(14, 6))
+# Let's see first few rows of the data in dataset
+df.head()
 
-# Plot the revenue distribution plot
-plt.subplot(1, 2, 1)
-sns.histplot(df["revenue"], kde=True)
-plt.title("Revenue Distribution")
-plt.xlabel("Revenue")
-plt.ylabel("Density")
 
-# Plot the profit distribution plot
-plt.subplot(1, 2, 2)
-sns.histplot(df["profit"], kde=True, color="orange")
-plt.title("Profit Distribution")
-plt.xlabel("Profit")
-plt.ylabel("Density")
+# let's see a brief overview of the data first , so that we can move on
+df.describe()
 
-# Adjust layout to make room for the plots
-plt.tight_layout()
-plt.show()  # Let's use a boxplot to make it much easier
-sns.boxplot(
-    df["revenue"]
-)  # THis data set doesn't seem to have much of an outliers here, as the copmpanies revenue and profit have been growing in similiar rate, also it seems like
-# The revenue and profit also align with the result we get from a simple google search . Now we can move on to analysis part ## Analysis #let's have a look at the data
-df  # Now let's create a dataframe that holds the data of top 10 largest companies based on revenue
-revenue = df.sort_values(by="revenue", ascending=False).head(10)
-revenuedfemployee = df.sort_values(by="employees", ascending=False)[
-    ["company", "employees"]
-].head(10)
-employee  # Now let's see how many companies are there from each sector, and maybe create a dataframe that holds that data
-sector_counts = df["sector"].value_counts().reset_index()
-sector_counts  # Now we can see the companies where ceo are women
-ceo_women = df.loc[df["ceo_woman"] == "yes", ["company", "revenue", "Market Cap"]]
-ceo_womensector_market_cap = (
-    df.groupby("sector")["Market Cap"].sum().sort_values.reset_index()
+
+# Let's see some info about the dataset next .
+df.info()
+
+
+# Now that we know some basic info about the dataset , let's see columns name and data types of columns of our dataset
+df.dtypes
+
+
+print(df.columns)
+
+
+# Now that we have an idea of what the data looks like , let's start with data cleaning
+# First let's remove the Ticker columns as it is really unnecassary for our analysis
+df.drop(columns=["Ticker"], inplace=True)
+
+
+# Now let's drop the rows with missing values in the dataset, also drop the duplicate rows in the dataset
+df.drop_duplicates(inplace=True)
+df.dropna(inplace=True)
+
+
+# Now let's change the data type of columns to numeric where necassary
+df["rank_change"] = df["rank_change"].astype(int)
+df["num. of employees"] = df["num. of employees"].astype(int)
+
+
+# Now let's change the name of the column from num of employees to num_employees so that it would be easier
+df = df.rename(columns={"num. of employees": "num_employees"})
+
+
+# now let's reset the index of the dataset
+df = df.reset_index(drop=True)
+
+
+# Now let's fill the null value in the revenue column with the mean of sector and revenue
+df["revenue"] = df.groupby("sector")["revenue"].transform(
+    lambda x: x.fillna(x.median())
 )
-sector_market_capwomen_marketcap = (
-    df[df["ceo_woman"] == 1]
-    .groupby("company")["Market Cap"]
-    .sum()
-    .sort_values(ascending=False)
-    .reset_index()
+
+
+# Now let's remove ',' and also the '$' signs from the profit columns as this would make it easier for calculation
+df["profit"] = (
+    df["profit"]
+    .astype(str)
+    .str.replace(",", "", regex=False)
+    .str.replace("$", "", regex=False)
+    .astype(float)
 )
-men_marketcap = (
-    df[df["ceo_woman"] == 0]
-    .groupby("company")["Market Cap"]
-    .sum()
-    .sort_values(ascending=False)
-    .reset_index()
+
+
+# Now let's create a new column called revenue per companies so that we will know how much does the company pulls off per employee
+df["revenue_per_employee"] = df["revenue"] / df["num_employees"]
+
+
+# Let's create a bin for revenue and save it in revenue_Group columns so that it would be easier for the analysis
+df["revenue_group"] = pd.cut(
+    df["revenue"], bins=5, labels=["Very Low", "Low", "Medium", "High", "Very High"]
 )
-women_marketcap  # Now that we know how many companies who have women as CEO of the companies.
-# Now let's see all the companies and their market cap who are new commenrs to the list.
-new_comers = (
-    df.loc[df["newcomer"] == "yes", ["company", "revenue", "Market Cap"]]
-    .sort_values(by="Market Cap", ascending=False)
-    .reset_index(drop=True)
-)
-new_comers  # Now let's see which cities has the most numbers of fortuen 1000 companies
-cities = df["city"].value_counts().reset_index()
-cities  # Now that we hae the data for the cities with the most number of these companies , now let's create a dataframe that holds the data of top 10 countries
-# with the highest profit
-profit = (
-    df.sort_values(by="profit", ascending=False)[
-        ["company", "sector", "revenue", "profit", "Market Cap"]
-    ]
-    .head(10)
-    .reset_index(drop=True)
-)
-profit  # Let's see how many companies rank increased compared to previous year
-rank_increase = df.loc[
-    df["rank_change"] > 0, ["rank", "prev_rank", "company", "revenue", "Market Cap"]
-].reset_index(drop=True)
-rank_increase  # Now that we are done with this wecan continue towards data visualization
-# We are gonna use matplotlib  and seaborn to visualize the data #Let's create a barchart using the sector_counts dataframe so that we will have a better idea of the data
-sector_counts = sector_counts.head(10)
-plt.figure(figsize=(10, 15))  # Adjust the size of the figure as needed
-plt.bar(sector_counts["sector"], sector_counts["count"], color="skyblue")
-plt.title("Sector Counts Bar Chart")
-plt.xlabel("Sectors")
-plt.ylabel("Counts")
-plt.xticks(fontsize=5)
-plt.yticks(fontsize=5)
-plt.show()  # Now let's create a plot that shows top 10 companies with largest employees count
-plt.figure(figsize=(10, 15))
-plt.plot(employee["company"], employee["employees"], color="skyblue")
-plt.xlabel("Companies")
-plt.ylabel("Employees count")
-plt.xticks(fontsize=5)
-plt.show()  # Now let's plot another plot that will show line chart of both GDP
-df  # Now let's make dual line chart that will show market cap of men and women companies side by side
-men_marketcap.plot.bar()
-plt.show()  # Now let's plot a pie-chart of companies according to sectors.
-# Plotting the pie chart
-plt.figure(figsize=(10, 10))
+
+
+# let's change all the test in city columns to lowercase so that it would be easier to read and perform analysis on
+df["city"] = df["city"].astype(str).str.lower()
+
+
+# Let's detect outliers in the data using the z_score methods
+
+z_scores = np.abs(stats.zscore(df["profit"]))
+df = df[(z_scores < 3)]
+
+
+# now let's remove all the special characters in the website columns
+
+df["Website"] = df["Website"].apply(lambda x: re.sub(r"[^\w\s.]", "", x))
+
+
+# Let's delete duplicate rows but also keeping the first occurance of the data
+df = df.drop_duplicates(subset=["company", "revenue"], keep="first")
+
+
+# Let's create a new columns that holds the profit margin data and name it simply profit margin
+df["profit_margin"] = df["profit"] / df["revenue"]
+
+
+# Now taht we are done with data cleanign we can move on to exploration
+df.head()
+
+
+# Now let's create a visualization that shows the porportion of male and female CEOs in Fortune 1000 Companies in The us
+# we will be creating a pie-chart that shows what porpotion of CEOs are wome nand what propotion are male in those companies
+female_ceo_counts = df["ceo_woman"].value_counts()
+plt.figure(figsize=(8, 8))
 plt.pie(
-    sector_counts["count"],
-    labels=sector_counts.sector,
-    autopct="%1.1f%%",
-    startangle=140,
+    female_ceo_counts, labels=female_ceo_counts.index, autopct="%1.1f%%", startangle=140
 )
-plt.title("Companies according to sector ")
-plt.axis("equal")  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-# Display the plot
+plt.title("Proportion of Female CEOs", fontsize=14)
 plt.show()
+
+
+# From the above pie chart we can see that in the fortune 100 companies , only 8.3% CEOs are Female,
+# This indicates a huge Gender Gap in leadership positions in the corporate world.
+
+
+# Now let's create a histogram of revenue
+plt.figure(figsize=(10, 6))
+plt.hist(df["revenue"], bins=20, edgecolor="k")
+plt.xlabel("Revenue", fontsize=12)
+plt.ylabel("Frequency", fontsize=12)
+plt.title("Distribution of Revenue", fontsize=14)
+plt.show()
+
+
+# This historgram of revenue distribution we can clearly see that very few companies hold alot of Revenue
+# We can say that even among top 1000 companies top 100 companies holds more revenue than all of other 900 combined
+
+
+# Top 10 sectors by number of companies in the list
+top_sectors = df["sector"].value_counts().head(10)
+plt.figure(figsize=(12, 6))
+top_sectors.plot(kind="bar")
+plt.xlabel("Sector", fontsize=12)
+plt.ylabel("Number of Companies", fontsize=12)
+plt.title("Top 10 Sectors by Number of Companies", fontsize=14)
+plt.xticks(rotation=45)
+plt.show()
+
+
+# From teh above bar chart we can clearly see that Technology Fianance and Energy are the leading top secotrs in the list
+# While financials leads the pact , Food . Bevrages and tobacco are at the bottom of the top 10
+
+
+# Scatter plot of revenue Vs profit
+plt.figure(figsize=(10, 6))
+plt.scatter(df["revenue"], df["profit"], alpha=0.5)
+plt.xlabel("Revenue", fontsize=12)
+plt.ylabel("Profit", fontsize=12)
+plt.title("Relationship between Revenue and Profit", fontsize=14)
+plt.show()
+
+
+# The scatter plot clearly states that the companies with highest revenues have highest profit
+# but also there are a few anamolies where compnies with high revenue have low profit , Companies with low revenue also have very high profit.
+
+
+# Revenue by sector
+plt.figure(figsize=(12, 8))
+df.boxplot(column="revenue", by="sector", vert=False)
+plt.xlabel("Revenue", fontsize=12)
+plt.ylabel("Sector", fontsize=12)
+plt.title("Revenue Distribution by Sector", fontsize=14)
+plt.suptitle("")
+plt.show()
+
+
+# Even though Retailing sector was one of the bottom 5 companies it leads as the sector with the highest revenue.
+# and on the contrary Eventhough financials was leading with most number of companies in the fortune 1000s list, it is one of the sectors with least revenue
+
+
+# Histogrma of number of employee
+plt.figure(figsize=(10, 6))
+plt.hist(df["num_employees"], bins=20, edgecolor="k")
+plt.xlabel("Number of Employees", fontsize=12)
+plt.ylabel("Frequency", fontsize=12)
+plt.title("Distribution of Number of Employees", fontsize=14)
+plt.show()
+
+
+# From the above Histogram we can clearly see that as with revenue , Some companies at the top employees
+# The most people ,for example Walmart employs more than 2 million people all by themselves
+
+
+# Top 10 cities with most companies
+top_cities = df["city"].value_counts().head(10)
+plt.figure(figsize=(12, 6))
+top_cities.plot(kind="bar")
+plt.xlabel("City", fontsize=12)
+plt.ylabel("Number of Companies", fontsize=12)
+plt.title("Top 10 Cities by Number of Companies", fontsize=14)
+plt.xticks(rotation=45)
+plt.show()
+
+
+# From above bar chart we can clearly see that new york has the highest number of companies in the Fortuen 100 companies
+# Followed by Houston and Chicago , With Charlotte and Columbus right at the end of the top 10.
+
+
+# Number of companies by state
+companies_by_state = df["state"].value_counts()
+plt.figure(figsize=(12, 6))
+companies_by_state.plot(kind="bar")
+plt.xlabel("State", fontsize=12)
+plt.ylabel("Number of Companies", fontsize=12)
+plt.title("Number of Companies by State", fontsize=14)
+plt.xticks(rotation=45)
+plt.show()
+
+
+# above bar chart clearly shows us that Chicago and Texas and New York are top 3 states, while chicago being the top as it have more than 127 companies in Fortune 1000 list.
+# Also we can see that Puerto Rico has the least number of companies in the fortune 1000 companies
+
+
+profitability_by_sector = (
+    df.groupby("sector")["profitable"].value_counts(normalize=True).unstack()
+)
+plt.figure(figsize=(12, 6))
+profitability_by_sector.plot(kind="bar", stacked=True, color=["skyblue", "lightcoral"])
+plt.xlabel("Sector", fontsize=12)
+plt.ylabel("Proportion of Companies", fontsize=12)
+plt.title("Profitability by Sector", fontsize=14)
+plt.legend(["Not Profitable", "Profitable"])
+plt.xticks(rotation=45)
+plt.show()
+
+
+# From the above stacked barchart we can clearly notice that although companies make billions in revenue not all of them gurantee profit.
+# as evident from chart , Mining and Energy makes billion of dollars in revenue it is the least profitable sector , joined by media , which also makes billions in revenue but has little no negligable profit margin
+# Also wholesalers and Retailers May have the one of the least revenue , It has the highest profit margin and is the best sector to start working , investing or Starting a business
